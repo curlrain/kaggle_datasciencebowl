@@ -48,17 +48,28 @@ def smooth_probs(P, alpha=0.5):
 
 
 classes = [c.split()[0].strip() for c in open('classes.txt')]
-im_size = 75
+im_size = 20
 
-df = pd.read_csv('data/train_im_size=%d.csv.gz' % im_size, compression='gzip')
+df = pd.read_csv('data/train_im_size=%d.csv.gz' % im_size,
+                 compression='gzip')
 X = df.ix[:, :(im_size ** 2)]
 y = pd.Categorical(df['class'], categories=classes).codes
 
 print(X.shape)
 
+y_pred = np.zeros((X.shape[0], 121))
+y_pred[:, 0] = 1 - (1 / 121000000 * 120)
+y_pred[:, 1:] = 1 / 121000000.
+
+print(y_pred.sum(axis=1))
+print(multiclass_log_loss(y, y_pred, smoothing_alpha=0))
+
+exit()
+
+
 #clf = DummyClassifier('most_frequent')
 #clf = KNeighborsClassifier(n_neighbors=5)
-clf = RandomForestClassifier(n_estimators=150, n_jobs=-1)
+clf = RandomForestClassifier(n_estimators=250, n_jobs=-1)
 #clf = SVC(probability=True)
 
 pca = PCA(n_components=20)
@@ -74,43 +85,43 @@ print(X.shape)
 
 ###############################################################################
 
-# X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
+X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
 
-# print(X_train.shape)
-# print(X_test.shape)
+print(X_train.shape)
+print(X_test.shape)
 
-# clf.fit(X_train, y_train)
-# y_pred = clf.predict_proba(X_test)
+clf.fit(X_train, y_train)
+y_pred = clf.predict_proba(X_test)
 
-# # alpha = 0.025
-# # print(multiclass_log_loss(y_test, y_pred, smoothing_alpha=alpha))
-# for alpha in np.arange(0, 0.2, 0.01):
-#     print(alpha, multiclass_log_loss(y_test, y_pred, smoothing_alpha=alpha))
+# alpha = 0.025
+# print(multiclass_log_loss(y_test, y_pred, smoothing_alpha=alpha))
+for alpha in np.arange(0, 0.2, 0.05):
+    print(alpha, multiclass_log_loss(y_test, y_pred, smoothing_alpha=alpha))
 
 ###############################################################################
 
-clf.fit(X, y)
+# clf.fit(X, y)
 
-del X, y
+# del X, y
 
-df_test = pd.read_csv('data/test_im_size=%d.csv.gz' % im_size,
-                      compression='gzip')
-X_test = df_test.ix[:, 1:]
+# df_test = pd.read_csv('data/test_im_size=%d.csv.gz' % im_size,
+#                       compression='gzip')
+# X_test = df_test.ix[:, 1:]
 
-print(X_test.shape)
+# print(X_test.shape)
 
-X_test = pca.transform(X_test)
+# X_test = pca.transform(X_test)
 
-print(X_test.shape)
+# print(X_test.shape)
 
-y_pred = clf.predict_proba(X_test)
+# y_pred = clf.predict_proba(X_test)
 
-alpha = 0.025
-yp = pd.DataFrame(smooth_probs(y_pred, alpha), columns=classes,
-                  index=df_test.image)
-yp.index.name = 'image'
+# alpha = 0.025
+# yp = pd.DataFrame(smooth_probs(y_pred, alpha), columns=classes,
+#                   index=df_test.image)
+# yp.index.name = 'image'
 
-print(yp.shape)
+# print(yp.shape)
 
-yp.to_csv('submissions/im=%d_pca=20_rf=150_alpha=025.csv' % im_size)
-os.system('gzip submissions/im=%d_pca=20_rf=150_alpha=025.csv' % im_size)
+# yp.to_csv('submissions/im=%d_pca=20_rf=150_alpha=025.csv' % im_size)
+# os.system('gzip submissions/im=%d_pca=20_rf=150_alpha=025.csv' % im_size)
