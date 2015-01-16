@@ -21,7 +21,7 @@ def extract_train(im_size=20):
         c = re.search('data/train/(.*)/.*.jpg', fn).group(1)
         y.append(c)
         im = imread(fn, as_grey=True)
-        im = resize(im, (im_size, im_size))
+        im = tf.resize(im, (im_size, im_size))
         X[i, 0:im_area] = np.reshape(im, (1, im_area))
 
     # i = 0
@@ -124,12 +124,12 @@ def extract_test(im_size=20):
         im = tf.resize(im, (im_size, im_size))
         X[i, 0:im_area] = np.reshape(im, (1, im_area))
 
-    return X, fns
-    # D = pd.DataFrame(X, index=fns)
-    # D.index.name = 'image'
-    # D.to_csv('data/test_im_size=%d.csv' % im_size, index=True)
-    # os.system('gzip data/test_im_size=%d.csv' % im_size)
-    # print(D.shape)
+    #return X, fns
+    D = pd.DataFrame(X, index=fns)
+    D.index.name = 'image'
+    D.to_csv('data/test_im_size=%d.csv' % im_size, index=True)
+    os.system('gzip data/test_im_size=%d.csv' % im_size)
+    print(D.shape)
 
 
 def extract_for_theano(im_size=28):
@@ -166,8 +166,8 @@ def extract_for_theano(im_size=28):
     
 if __name__ == '__main__':
 
-    #extract_train(im_size=75)
-    #extract_test(im_size=75)
+    extract_train(im_size=28)
+    extract_test(im_size=28)
     #extract_train_c0(im_size=50)
     #extract_train_trans2(im_size=20)
-    extract_for_theano(im_size=28)
+    #extract_for_theano(im_size=28)

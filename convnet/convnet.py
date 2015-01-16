@@ -2,9 +2,10 @@ import theano
 from theano import tensor as T
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 import numpy as np
-from load import mnist
 from theano.tensor.nnet.conv import conv2d
 from theano.tensor.signal.downsample import max_pool_2d
+import pandas as pd
+
 
 srng = RandomStreams()
 
@@ -60,13 +61,32 @@ def model(X, w, w2, w3, w4, p_drop_conv, p_drop_hidden):
     pyx = softmax(T.dot(l4, w_o))
     return l1, l2, l3, l4, pyx
 
-trX, teX, trY, teY = mnist(onehot=True)
+df_train = pd.read_csv('../data/train_im_size=28.csv.gz', compression='gzip')
+#df_test = pd.read_csv('../data/test_im=28.csv.gz', compression='gzip')
 
-trX = trX[:1000, :]
-teX = trX[:1000, :]
+n_classes = 121
+assert n_classes == len(df_train['class'].unique())
 
-trX = trX.reshape(-1, 1, 28, 28)
-teX = teX.reshape(-1, 1, 28, 28)
+df_train = df_train.reindex(np.random.permutation(df_train.index))
+df_train.reset_index(inplace=True)
+
+#df_train = df_train.iloc[:1000, :]
+
+class_codes = pd.Categorical(df_train['class']).codes
+
+n_train = int(df_train.shape[0] * .8)
+trX = df_train.iloc[:n_train, :(28 ** 2)]
+trY = np.zeros((n_train, n_classes))
+trY[np.arange(n_train), class_codes[:n_train]] = 1 # one-hot
+
+n_test = df_train.shape[0] - n_train
+teX = df_train.iloc[n_train:, :(28 ** 2)]
+assert teX.shape[0] == n_test
+teY = np.zeros((n_test, n_classes))
+teY[np.arange(n_test), class_codes[:n_test]] = 1 # one-hot
+
+trX = trX.values.reshape(-1, 1, 28, 28)
+teX = teX.values.reshape(-1, 1, 28, 28)
 
 X = T.ftensor4()
 Y = T.fmatrix()
@@ -75,25 +95,25 @@ w = init_weights((32, 1, 3, 3))
 w2 = init_weights((64, 32, 3, 3))
 w3 = init_weights((128, 64, 3, 3))
 w4 = init_weights((128 * 3 * 3, 625))
-w_o = init_weights((625, 10))
+w_o = init_weights((625, n_classes))
 
 noise_l1, noise_l2, noise_l3, noise_l4, noise_py_x = model(X, w, w2, w3, w4, 0.2, 0.5)
 l1, l2, l3, l4, py_x = model(X, w, w2, w3, w4, 0., 0.)
 y_x = T.argmax(py_x, axis=1)
-
+nll = -T.mean(T.log(py_x)[T.arange(y_x.shape[0]), y_x])
 
 cost = T.mean(T.nnet.categorical_crossentropy(noise_py_x, Y))
 params = [w, w2, w3, w4, w_o]
 updates = RMSprop(cost, params, lr=0.001)
 
 train = theano.function(inputs=[X, Y], outputs=cost, updates=updates, allow_input_downcast=True)
-predict = theano.function(inputs=[X], outputs=py_x, allow_input_downcast=True)
+predict = theano.function(inputs=[X], outputs=nll, allow_input_downcast=True)
 
 for i in range(100):
     for start, end in zip(range(0, len(trX), 128), range(128, len(trX), 128)):
         cost = train(trX[start:end], trY[start:end])
+    print predict(teX)
     #print np.mean(np.argmax(teY, axis=1) == predict(teX))
-    p = predict(teX)
-    print p.shape
-    print p.sum(axis=1)
-    exit()
+    # p = predict(teX)
+    # print p.shape
+    # print p.sum(axis=1)
