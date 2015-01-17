@@ -7,7 +7,13 @@ from theano.tensor.nnet.conv import conv2d
 from theano.tensor.signal.downsample import max_pool_2d
 import pandas as pd
 import os
+import sys
 
+
+do_leaderboard = False
+n_epochs = int(sys.argv[1])
+minibatch_size = 128
+im_size = 28
 
 srng = RandomStreams()
 
@@ -62,10 +68,6 @@ def model(X, w, w2, w3, w4, p_drop_conv, p_drop_hidden):
 
     pyx = softmax(T.dot(l4, w_o))
     return l1, l2, l3, l4, pyx
-
-do_leaderboard = False
-
-im_size = 28
 
 df_train = pd.read_csv('../data/train_im_size=%d.csv.gz' % im_size,
                        compression='gzip')
@@ -150,9 +152,6 @@ if do_leaderboard:
 else:
     predict = theano.function(inputs=[X, Y], outputs=cost_test,
                               allow_input_downcast=True)
-
-n_epochs = 50
-minibatch_size = 128
 
 for i in range(n_epochs):
     train_costs = []
