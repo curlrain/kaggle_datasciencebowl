@@ -1,3 +1,4 @@
+from __future__ import print_function, division
 from sklearn.cross_validation import cross_val_score, train_test_split
 from sklearn.svm import LinearSVC, SVC
 from sklearn.neighbors import KNeighborsClassifier
@@ -5,6 +6,8 @@ from sklearn.decomposition import PCA, TruncatedSVD, RandomizedPCA
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.dummy import DummyClassifier
 from sklearn.metrics import make_scorer
+import sys
+import sklearn
 import numpy as np
 import pandas as pd
 import os
@@ -47,25 +50,16 @@ def smooth_probs(P, alpha=0.5):
     return P - (alpha * D)
 
 
-classes = [c.split()[0].strip() for c in open('classes.txt')]
-im_size = 20
+classes = [c.split()[0].strip() for c in open('../classes.txt')]
+im_size = 28
 
-df = pd.read_csv('data/train_im_size=%d.csv.gz' % im_size,
+df = pd.read_csv('../data/train_im_size=%d.csv.gz' % im_size,
                  compression='gzip')
 X = df.ix[:, :(im_size ** 2)]
-y = pd.Categorical(df['class'], categories=classes).codes
+#y = pd.Categorical(df['class'], categories=classes).codes
+y = pd.Categorical(df['class']).codes
 
 print(X.shape)
-
-y_pred = np.zeros((X.shape[0], 121))
-y_pred[:, 0] = 1 - (1 / 121000000 * 120)
-y_pred[:, 1:] = 1 / 121000000.
-
-print(y_pred.sum(axis=1))
-print(multiclass_log_loss(y, y_pred, smoothing_alpha=0))
-
-exit()
-
 
 #clf = DummyClassifier('most_frequent')
 #clf = KNeighborsClassifier(n_neighbors=5)
@@ -73,7 +67,7 @@ clf = RandomForestClassifier(n_estimators=250, n_jobs=-1)
 #clf = SVC(probability=True)
 
 pca = PCA(n_components=20)
-X = pca.fit_transform(X)
+#X = pca.fit_transform(X)
 
 print(X.shape)
 
@@ -89,14 +83,23 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
 
 print(X_train.shape)
 print(X_test.shape)
+print(X_train.sum())
+print(X_test.sum())
+
+exit()
+
+print(X_train.shape)
+print(X_test.shape)
 
 clf.fit(X_train, y_train)
-y_pred = clf.predict_proba(X_test)
 
-# alpha = 0.025
-# print(multiclass_log_loss(y_test, y_pred, smoothing_alpha=alpha))
-for alpha in np.arange(0, 0.2, 0.05):
-    print(alpha, multiclass_log_loss(y_test, y_pred, smoothing_alpha=alpha))
+alpha = 0.025
+print('train NLL:', multiclass_log_loss(y_train, clf.predict_proba(X_train),
+                                        smoothing_alpha=alpha))
+print('test NLL:', multiclass_log_loss(y_test, clf.predict_proba(X_test),
+                                       smoothing_alpha=alpha))
+# for alpha in np.arange(0, 0.2, 0.05):
+#     print(alpha, multiclass_log_loss(y_test, y_pred, smoothing_alpha=alpha))
 
 ###############################################################################
 

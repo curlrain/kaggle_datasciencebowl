@@ -1,3 +1,4 @@
+from __future__ import print_function, division
 import theano
 from theano import tensor as T
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
@@ -64,17 +65,20 @@ def model(X, w, w2, w3, w4, p_drop_conv, p_drop_hidden):
 
 do_leaderboard = False
 
-df_train = pd.read_csv('../data/train_im_size=28.csv.gz', compression='gzip')
+im_size = 28
+
+df_train = pd.read_csv('../data/train_im_size=%d.csv.gz' % im_size,
+                       compression='gzip')
 if do_leaderboard:
-    df_test = pd.read_csv('../data/test_im_size=28.csv.gz', compression='gzip',
-                          index_col='image')
+    df_test = pd.read_csv('../data/test_im_size=%d.csv.gz' % im_size,
+                          compression='gzip', index_col='image')
     
 n_classes = 121
 assert n_classes == len(df_train['class'].unique())
 
-# shuffle whole training set
+# # shuffle whole training set
 df_train = df_train.reindex(np.random.permutation(df_train.index))
-df_train.reset_index(inplace=True)
+df_train.reset_index(inplace=True, drop=True)
 
 #df_train = df_train.iloc[:10000, :]
 #df_test = df_test.iloc[:10000, :]
@@ -89,7 +93,7 @@ assert len(class_categories) == n_classes
 if do_leaderboard:
 
     n_train = df_train.shape[0]
-    trX = df_train.iloc[:, :(28 ** 2)]
+    trX = df_train.iloc[:, :(im_size ** 2)]
     trY = np.zeros((n_train, n_classes))
     trY[np.arange(n_train), class_codes] = 1 # one-hot
 
@@ -99,19 +103,25 @@ if do_leaderboard:
 else:
 
     train_prop = 0.8
-    n_train = int(df_train.shape[0] * train_prop)
-    trX = df_train.iloc[:n_train, :(28 ** 2)]
+    n_train = int(df_train.shape[0] * train_prop)          
+    trX = df_train.iloc[:n_train, :(im_size ** 2)]
     trY = np.zeros((n_train, n_classes))
     trY[np.arange(n_train), class_codes[:n_train]] = 1 # one-hot
 
     n_test = df_train.shape[0] - n_train
-    teX = df_train.iloc[n_train:, :(28 ** 2)]
+    teX = df_train.iloc[n_train:, :(im_size ** 2)]
     assert teX.shape[0] == n_test
     teY = np.zeros((n_test, n_classes))
     teY[np.arange(n_test), class_codes[:n_test]] = 1 # one-hot
+
+    # make sure test will see the 121 classes
+    assert len(set(class_codes[:n_train])) == n_classes
     
-trX = trX.values.reshape(-1, 1, 28, 28)
-teX = teX.values.reshape(-1, 1, 28, 28)
+trX = trX.values.reshape(-1, 1, im_size, im_size)
+teX = teX.values.reshape(-1, 1, im_size, im_size)
+
+print('train:', trX.shape, trY.shape)
+print('test:', teX.shape, teY.shape if not do_leaderboard else '')
 
 X = T.ftensor4()
 Y = T.fmatrix()
@@ -150,9 +160,9 @@ for i in range(n_epochs):
                           range(minibatch_size, n_train, minibatch_size)):
         train_costs.append(train(trX[start:end], trY[start:end]))
     if do_leaderboard:
-        print i, np.average(train_costs)
+        print(i, np.average(train_costs))
     else:
-        print i, np.average(train_costs), predict(teX, teY)
+        print(i, np.average(train_costs), predict(teX, teY))
 
 if do_leaderboard:
     sub = pd.DataFrame(predict(teX), columns=class_categories)
