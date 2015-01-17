@@ -112,7 +112,7 @@ else:
     teX = df_train.iloc[n_train:, :(im_size ** 2)]
     assert teX.shape[0] == n_test
     teY = np.zeros((n_test, n_classes))
-    teY[np.arange(n_test), class_codes[:n_test]] = 1 # one-hot
+    teY[np.arange(n_test), class_codes[n_train:]] = 1 # one-hot
 
     # make sure test will see the 121 classes
     assert len(set(class_codes[:n_train])) == n_classes
