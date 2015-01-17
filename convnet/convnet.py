@@ -5,6 +5,7 @@ import numpy as np
 from theano.tensor.nnet.conv import conv2d
 from theano.tensor.signal.downsample import max_pool_2d
 import pandas as pd
+import os
 
 
 srng = RandomStreams()
@@ -61,30 +62,54 @@ def model(X, w, w2, w3, w4, p_drop_conv, p_drop_hidden):
     pyx = softmax(T.dot(l4, w_o))
     return l1, l2, l3, l4, pyx
 
-df_train = pd.read_csv('../data/train_im_size=28.csv.gz', compression='gzip')
-#df_test = pd.read_csv('../data/test_im=28.csv.gz', compression='gzip')
+do_leaderboard = False
 
+df_train = pd.read_csv('../data/train_im_size=28.csv.gz', compression='gzip')
+if do_leaderboard:
+    df_test = pd.read_csv('../data/test_im_size=28.csv.gz', compression='gzip',
+                          index_col='image')
+    
 n_classes = 121
 assert n_classes == len(df_train['class'].unique())
 
+# shuffle whole training set
 df_train = df_train.reindex(np.random.permutation(df_train.index))
 df_train.reset_index(inplace=True)
 
-#df_train = df_train.iloc[:1000, :]
+#df_train = df_train.iloc[:10000, :]
+#df_test = df_test.iloc[:10000, :]
 
-class_codes = pd.Categorical(df_train['class']).codes
+# will be in alphabetical order
+class_categorical = pd.Categorical(df_train['class'])
+class_codes = class_categorical.codes
+assert len(class_codes) == df_train.shape[0]
+class_categories = class_categorical.categories
+assert len(class_categories) == n_classes
 
-n_train = int(df_train.shape[0] * .8)
-trX = df_train.iloc[:n_train, :(28 ** 2)]
-trY = np.zeros((n_train, n_classes))
-trY[np.arange(n_train), class_codes[:n_train]] = 1 # one-hot
+if do_leaderboard:
 
-n_test = df_train.shape[0] - n_train
-teX = df_train.iloc[n_train:, :(28 ** 2)]
-assert teX.shape[0] == n_test
-teY = np.zeros((n_test, n_classes))
-teY[np.arange(n_test), class_codes[:n_test]] = 1 # one-hot
+    n_train = df_train.shape[0]
+    trX = df_train.iloc[:, :(28 ** 2)]
+    trY = np.zeros((n_train, n_classes))
+    trY[np.arange(n_train), class_codes] = 1 # one-hot
 
+    n_test = df_test.shape[0]
+    teX = df_test
+    
+else:
+
+    train_prop = 0.8
+    n_train = int(df_train.shape[0] * train_prop)
+    trX = df_train.iloc[:n_train, :(28 ** 2)]
+    trY = np.zeros((n_train, n_classes))
+    trY[np.arange(n_train), class_codes[:n_train]] = 1 # one-hot
+
+    n_test = df_train.shape[0] - n_train
+    teX = df_train.iloc[n_train:, :(28 ** 2)]
+    assert teX.shape[0] == n_test
+    teY = np.zeros((n_test, n_classes))
+    teY[np.arange(n_test), class_codes[:n_test]] = 1 # one-hot
+    
 trX = trX.values.reshape(-1, 1, 28, 28)
 teX = teX.values.reshape(-1, 1, 28, 28)
 
@@ -97,23 +122,42 @@ w3 = init_weights((128, 64, 3, 3))
 w4 = init_weights((128 * 3 * 3, 625))
 w_o = init_weights((625, n_classes))
 
-noise_l1, noise_l2, noise_l3, noise_l4, noise_py_x = model(X, w, w2, w3, w4, 0.2, 0.5)
+noise_l1, noise_l2, noise_l3, noise_l4, noise_py_x = model(X, w, w2, w3,
+                                                           w4, 0.2, 0.5)
 l1, l2, l3, l4, py_x = model(X, w, w2, w3, w4, 0., 0.)
-y_x = T.argmax(py_x, axis=1)
-nll = -T.mean(T.log(py_x)[T.arange(y_x.shape[0]), y_x])
+#y_x = T.argmax(py_x, axis=1)
 
-cost = T.mean(T.nnet.categorical_crossentropy(noise_py_x, Y))
+cost_train = T.mean(T.nnet.categorical_crossentropy(noise_py_x, Y))
+cost_test = T.mean(T.nnet.categorical_crossentropy(py_x, Y))
 params = [w, w2, w3, w4, w_o]
-updates = RMSprop(cost, params, lr=0.001)
+updates = RMSprop(cost_train, params, lr=0.001)
 
-train = theano.function(inputs=[X, Y], outputs=cost, updates=updates, allow_input_downcast=True)
-predict = theano.function(inputs=[X], outputs=nll, allow_input_downcast=True)
+train = theano.function(inputs=[X, Y], outputs=cost_train, updates=updates,
+                        allow_input_downcast=True)
+if do_leaderboard:
+    predict = theano.function(inputs=[X], outputs=py_x,
+                              allow_input_downcast=True)
+else:
+    predict = theano.function(inputs=[X, Y], outputs=cost_test,
+                              allow_input_downcast=True)
 
-for i in range(100):
-    for start, end in zip(range(0, len(trX), 128), range(128, len(trX), 128)):
-        cost = train(trX[start:end], trY[start:end])
-    print predict(teX)
-    #print np.mean(np.argmax(teY, axis=1) == predict(teX))
-    # p = predict(teX)
-    # print p.shape
-    # print p.sum(axis=1)
+n_epochs = 50
+minibatch_size = 128
+
+for i in range(n_epochs):
+    train_costs = []
+    for start, end in zip(range(0, n_train, minibatch_size),
+                          range(minibatch_size, n_train, minibatch_size)):
+        train_costs.append(train(trX[start:end], trY[start:end]))
+    if do_leaderboard:
+        print i, np.average(train_costs)
+    else:
+        print i, np.average(train_costs), predict(teX, teY)
+
+if do_leaderboard:
+    sub = pd.DataFrame(predict(teX), columns=class_categories)
+    sub.index = df_test.index
+    sub.index.name = 'image'
+    fn = '../submissions/bla.csv'
+    sub.to_csv(fn, index=True)
+    os.system('gzip %s' % fn)
