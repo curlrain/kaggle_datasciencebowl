@@ -137,10 +137,18 @@ w_o = init_weights((625, n_classes))
 noise_l1, noise_l2, noise_l3, noise_l4, noise_py_x = model(X, w, w2, w3,
                                                            w4, 0.2, 0.5)
 l1, l2, l3, l4, py_x = model(X, w, w2, w3, w4, 0., 0.)
+# smooth proba when testing
+alpha = T.scalar('alpha', dtype='float32')
+n = T.shape(py_x)[0]
+m = T.shape(py_x)[1]
+beta = T.shape(py_x)**(-1)
+M = T.reshape(T.repeat(beta, m), newshape=(n, m))
+D = py_x - M
+smooth_py_x = py_x - alpha*D
 #y_x = T.argmax(py_x, axis=1)
 
 cost_train = T.mean(T.nnet.categorical_crossentropy(noise_py_x, Y))
-cost_test = T.mean(T.nnet.categorical_crossentropy(py_x, Y))
+cost_test = T.mean(T.nnet.categorical_crossentropy(smooth_py_x, Y))
 params = [w, w2, w3, w4, w_o]
 updates = RMSprop(cost_train, params, lr=0.001)
 
